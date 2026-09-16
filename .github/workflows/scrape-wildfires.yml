@@ -1,4 +1,4 @@
-name: Scrape CA Wildfire Burned Areas
+name: Scrape CA Wildfire Burned Areas and Evacuation Boundaries
 
 on:
   schedule:
@@ -52,18 +52,21 @@ jobs:
             }
           '
 
-      - name: Run scraper
-        run: Rscript R/download_wildfire_data.R
+      - name: Run burned areas scraper
+        run: Rscript R/download_burned_areas.R
+
+      - name: Run evacuation boundaries scraper
+        run: Rscript R/download_evac_boundaries.R
 
       - name: Commit and push changes if any
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add burned_areas/
+          git add burned_areas/ evac_boundaries/
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "Update wildfire burned area data [skip ci]"
+            git commit -m "Update wildfire burned area and evacuation boundary data [skip ci]"
             git push
           fi
 
