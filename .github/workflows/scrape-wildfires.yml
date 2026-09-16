@@ -2,18 +2,17 @@ name: Scrape CA Wildfire Burned Areas
 
 on:
   schedule:
-    # Runs at :00, :20, :40 past every hour (UTC). GitHub's scheduler can
-    # lag a few minutes during high load, so treat this as "about every
-    # 20 minutes" rather than exact.
-    - cron: "*/20 * * * *"
-  workflow_dispatch: {}  # lets you trigger a run manually from the Actions tab
+    # Runs once every hour, on the hour (UTC). GitHub's scheduler can lag
+    # a few minutes during high load, so treat this as "about hourly."
+    - cron: "0 * * * *"
+  workflow_dispatch: {} # lets you trigger a run manually from the Actions tab
 
 permissions:
-  contents: write  # needed so the workflow can commit new/changed files back
+  contents: write # needed so the workflow can commit new/changed files back
 
 concurrency:
   group: scrape-wildfires
-  cancel-in-progress: false  # don't kill an in-flight run if the next one fires first
+  cancel-in-progress: false # don't kill an in-flight run if the next one fires first
 
 jobs:
   scrape:
@@ -36,9 +35,11 @@ jobs:
 
       - name: Install R package dependencies
         run: |
-          Rscript -e 'pkgs <- c("httr", "jsonlite", "here", "digest"); \
-                      new <- pkgs[!pkgs %in% installed.packages()[,"Package"]]; \
-                      if (length(new)) install.packages(new, repos = "https://cloud.r-project.org")'
+          Rscript -e '
+            pkgs <- c("httr", "jsonlite", "here", "digest")
+            new <- pkgs[!pkgs %in% installed.packages()[,"Package"]]
+            if (length(new)) install.packages(new, repos = "https://cloud.r-project.org")
+          '
 
       - name: Run scraper
         run: Rscript R/download_wildfire_data.R
