@@ -1,0 +1,73 @@
+name: Scrape CA Wildfire Burned Areas
+
+on:
+  schedule:
+    # Runs at :00, :20, :40 past every hour (UTC). GitHub's scheduler can
+    # lag a few minutes during high load, so treat this as "about every
+    # 20 minutes" rather than exact.
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}  # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write  # needed so the workflow can commit new/changed files back
+
+concurrency:
+  group: scrape-wildfires
+  cancel-in-progress: false  # don't kill an in-flight run if the next one fires first
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+
+      - name: Cache R packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: r-pkgs-${{ runner.os }}-${{ hashFiles('.github/workflows/scrape-wildfires.yml') }}
+          restore-keys: r-pkgs-${{ runner.os }}-
+
+      - name: Install R package dependencies
+        run: |
+          Rscript -e 'pkgs <- c("httr", "jsonlite", "here", "digest"); \
+                      new <- pkgs[!pkgs %in% installed.packages()[,"Package"]]; \
+                      if (length(new)) install.packages(new, repos = "https://cloud.r-project.org")'
+
+      - name: Run scraper
+        run: Rscript R/download_wildfire_data.R
+
+      - name: Commit and push changes if any
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add burned_areas/
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update wildfire burned area data [skip ci]"
+            git push
+          fi
+
+      - name: Heartbeat commit (prevents 60-day inactivity auto-disable)
+        # GitHub disables scheduled workflows after 60 days with no repo
+        # activity. If the underlying dataset goes quiet for a long stretch,
+        # this keeps the repo "active" with a trivial, once-a-month commit.
+        run: |
+          today=$(date -u +%d)
+          if [ "$today" = "01" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            echo "Last run: $(date -u)" > .heartbeat
+            git add .heartbeat
+            if ! git diff --staged --quiet; then
+              git commit -m "Monthly heartbeat [skip ci]"
+              git push
+            fi
+          fi
